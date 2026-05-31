@@ -4,18 +4,14 @@
   "version": "${version}",
   "name": "Better Stacking",
   "description": "configure item, entity, xp stacking",
-  "authors": [],
+  "authors": ["CCPCT"],
   "contact": {},
   "license": "GPL-3.0",
   "icon": "assets/better_stacking/icon.png",
   "environment": "*",
   "entrypoints": {
-    "client": [
-      "CCPCT.better_stacking.client.Better_stackingClient"
-    ],
-    "main": [
-      "CCPCT.better_stacking.Better_stacking"
-    ]
+    "client": ["CCPCT.better_stacking.BetterStacking"],
+    "modmenu": ["CCPCT.better_stacking.modConfig.ModMenuHandler"]
   },
   "mixins": [
     "better_stacking.mixins.json"
