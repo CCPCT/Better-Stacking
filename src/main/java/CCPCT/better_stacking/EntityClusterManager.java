@@ -3,30 +3,33 @@ package CCPCT.better_stacking;
 import CCPCT.better_stacking.modConfig.ModConfig;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.monster.zombie.Zombie;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class EntityClusterManager {
 
-    private static final IntOpenHashSet entitiesToCull = new IntOpenHashSet();
-    // Tracks separate text labels per block position (e.g., BlockPos -> Map of Sub-types to Counts)
-    private static final Map<BlockPos, java.util.List<ClusterEntry>> activeClusters = new HashMap<>();
-    private static final Map<BlockPos, Object2IntOpenHashMap<EntityTypeKey>> clusterMap = new HashMap<>();
-    private static final long UPDATE_INTERVAL_MS = 100;
-    private static long lastUpdateTime = 0;
+    static final IntOpenHashSet entitiesToCull = new IntOpenHashSet();
+    static final List<ClusterEntry> activeClusters = new ObjectArrayList<>();
 
-    public static Map<BlockPos, List<ClusterEntry>> getActiveClusters() {
-        return Collections.unmodifiableMap(activeClusters);
+    // Tracks the number of physical entities for culling logic thresholds
+    static final Map<BlockPos, Object2IntOpenHashMap<String>> entityCountMap = new HashMap<>();
+    // Tracks the consolidated display value (mobs = entity count, items = total item count, xp = total points)
+    static final Map<BlockPos, Object2IntOpenHashMap<String>> displayValueMap = new HashMap<>();
+    static final Map<BlockPos, Map<EntityTypeKey, Entity>> firstEntityMap = new HashMap<>();
+
+    public static List<ClusterEntry> getActiveClusters() {
+        return activeClusters;
     }
 
     public static boolean shouldSkipRender(Entity entity) {
@@ -37,29 +40,31 @@ public class EntityClusterManager {
     }
 
     public static void updateClusterData(Minecraft client) {
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastUpdateTime < UPDATE_INTERVAL_MS) return;
-        lastUpdateTime = currentTime;
 
         ClientLevel level = client.level;
         if (level == null) return;
 
         entitiesToCull.clear();
-        clusterMap.clear();
+        entityCountMap.clear();
+        displayValueMap.clear();
         activeClusters.clear();
+        firstEntityMap.clear();
 
-        Map<BlockPos, Map<EntityTypeKey, Entity>> firstEntityMap = new HashMap<>();
+        if (!ModConfig.get().modEnabled) return;
 
-        // PHASE 1: Gather and separate counts based on EntityTypeKey (Type + Age)
+        // PHASE 1: Gather data and increment value metrics
         for (Entity entity : level.entitiesForRendering()) {
             if (entity == client.player) continue;
 
+            int valueIncrement = 1; // Default for mobs (1 entity = 1 count)
             switch (entity) {
-                case ItemEntity _ -> {
+                case ItemEntity item -> {
                     if (!ModConfig.get().itemGeneral) continue;
+                    valueIncrement = item.getItem().getCount(); // Use item count instead of 1
                 }
-                case ExperienceOrb _ -> {
+                case ExperienceOrb xp -> {
                     if (!ModConfig.get().xpGeneral) continue;
+                    valueIncrement = xp.getValue(); // Use raw XP points instead of 1
                 }
                 case Mob _ -> {
                     if (!ModConfig.get().entityGeneral) continue;
@@ -71,90 +76,69 @@ public class EntityClusterManager {
 
             BlockPos pos = new BlockPos(Mth.floor(entity.getX()), Mth.floor(entity.getY()), Mth.floor(entity.getZ()));
             EntityTypeKey key = EntityTypeKey.fromEntity(entity);
+            String checkKey = key.check();
 
-            Object2IntOpenHashMap<EntityTypeKey> typeCount = clusterMap.get(pos);
-            if (typeCount == null) {
-                typeCount = new Object2IntOpenHashMap<>();
-                clusterMap.put(pos, typeCount);
+            Object2IntOpenHashMap<String> entityCounts = entityCountMap.get(pos);
+            Object2IntOpenHashMap<String> displayValues = displayValueMap.get(pos);
+
+            if (entityCounts == null) {
+                entityCounts = new Object2IntOpenHashMap<>();
+                displayValues = new Object2IntOpenHashMap<>();
+                entityCountMap.put(pos, entityCounts);
+                displayValueMap.put(pos, displayValues);
                 firstEntityMap.put(pos, new HashMap<>());
             }
 
-            int count = typeCount.getInt(key);
-            typeCount.put(key, count + 1);
+            // Track how many physical entity boxes are here for our culling limit check
+            int rawCount = entityCounts.getInt(checkKey);
+            entityCounts.put(checkKey, rawCount + 1);
 
-            if (count == 0) {
+            // Accumulate the smart text value
+            int currentVal = displayValues.getInt(checkKey);
+            displayValues.put(checkKey, currentVal + valueIncrement);
+
+            if (rawCount == 0) {
                 firstEntityMap.get(pos).put(key, entity);
             }
         }
 
-        // PHASE 2: Evaluate rules against specific age cutoffs
+        // PHASE 2: Evaluate rules against specific limits and package
         for (Entity entity : level.entitiesForRendering()) {
             if (entity == client.player) continue;
 
-            int maxAllowed = 1;
+            int maxAllowed = 0;
             switch (entity) {
                 case ItemEntity _ -> {
                     if (!ModConfig.get().itemGeneral) continue;
                 }
-                case ExperienceOrb _ -> {
-                    if (!ModConfig.get().xpGeneral) continue;
-                }
+                case ExperienceOrb _ -> { if (!ModConfig.get().xpGeneral) continue; }
                 case Mob _ -> {
                     if (!ModConfig.get().entityGeneral) continue;
                     maxAllowed = ModConfig.get().entityCount;
                 }
-                default -> {
-                    continue;
-                }
+                default -> { continue; }
             }
 
             BlockPos pos = new BlockPos(Mth.floor(entity.getX()), Mth.floor(entity.getY()), Mth.floor(entity.getZ()));
             EntityTypeKey key = EntityTypeKey.fromEntity(entity);
+            String checkKey = key.check();
 
-            int totalCount = clusterMap.get(pos).getInt(key);
+            int totalEntities = entityCountMap.get(pos).getInt(checkKey);
 
-            if (totalCount > maxAllowed) {
+            if (totalEntities > maxAllowed) {
                 Entity representative = firstEntityMap.get(pos).get(key);
                 if (entity != representative) {
                     entitiesToCull.add(entity.getId());
                 } else {
-                    // Create our flat entry package
-                    ClusterEntry entryPackage = new ClusterEntry(
-                            key.type(),
-                            key.isBaby(),
-                            totalCount,
-                            entity.getBbHeight()
-                    );
+                    // Extract the clean consolidated value
+                    int dynamicCount = displayValueMap.get(pos).getInt(checkKey);
 
-                    // Append cleanly into the block's flat list registry
-                    activeClusters.computeIfAbsent(pos, _ -> new java.util.ArrayList<>()).add(entryPackage);
+                    ClusterEntry entryPackage = new ClusterEntry(representative, key, dynamicCount);
+                    activeClusters.add(entryPackage);
                 }
             }
         }
     }
 
-    public record EntityTypeKey(EntityType<?> type, boolean isBaby) {
-
-        public static EntityTypeKey fromEntity(Entity entity) {
-            boolean baby = false;
-            if (entity instanceof AgeableMob ageable) {
-                baby = ageable.isBaby();
-            } else if (entity instanceof Zombie zombie) {
-                baby = zombie.isBaby();
-            }
-            return new EntityTypeKey(entity.getType(), baby);
-        }
-    }
-
-    public record ClusterEntry(
-            EntityType<?> entityType,
-            boolean isBaby,
-            int count,
-            float entityHeight
-    ) {
-        public String getDisplayName() {
-            String name = entityType.getDescription().getString();
-            return isBaby ? "Baby " + name : name;
-        }
-    }
+    public record ClusterEntry(Entity leader, EntityTypeKey type, int count) {}
 }

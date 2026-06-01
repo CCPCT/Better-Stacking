@@ -10,19 +10,17 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.core.BlockPos;
-import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.world.entity.ExperienceOrb;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
-import org.joml.Quaternionf;
 
 import java.util.List;
-import java.util.Map;
 
 public class BetterStacking implements ClientModInitializer {
 
     int remaining = 1;
-    private static int debugLogThrottle = 0;
 
     @Override
     public void onInitializeClient() {
@@ -41,12 +39,11 @@ public class BetterStacking implements ClientModInitializer {
             Minecraft client = Minecraft.getInstance();
 
             // Safety and config validation checks
-            if (!ModConfig.get().modEnabled || !ModConfig.get().entityShowLabel || client.level == null) {
+            if (!ModConfig.get().modEnabled || client.level == null) {
                 return;
             }
 
-
-            Map<BlockPos, List<EntityClusterManager.ClusterEntry>> clusters = EntityClusterManager.getActiveClusters();
+            List<EntityClusterManager.ClusterEntry> clusters = EntityClusterManager.getActiveClusters();
             if (clusters.isEmpty()) return;
 
             Font font = client.font;
@@ -57,48 +54,51 @@ public class BetterStacking implements ClientModInitializer {
             Camera camera = client.gameRenderer.getMainCamera();
             Vec3 cameraPos = camera.position();
 
-            for (Map.Entry<BlockPos, List<EntityClusterManager.ClusterEntry>> entry : clusters.entrySet()) {
-                BlockPos blockPos = entry.getKey();
-                for (var clusterEntry : entry.getValue()) {
+            for (EntityClusterManager.ClusterEntry entry : clusters) {
+                final int count = entry.count();
+                String text = "x" + count;
+                final EntityTypeKey type = entry.type();
+                var leader = entry.leader();
 
-                    final int count = clusterEntry.count();
-
-                    final float relativeX = (float) ((blockPos.getX() + 0.5) - cameraPos.x);
-                    final float relativeY = (float) ((blockPos.getY() + 0.2 + clusterEntry.entityHeight()) - cameraPos.y);
-                    final float relativeZ = (float) ((blockPos.getZ() + 0.5) - cameraPos.z);
-
-                    poseStack.pushPose();
-
-                    poseStack.translate(relativeX, relativeY, relativeZ);
-
-                    poseStack.mulPose(camera.rotation());
-                    poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
-
-                    poseStack.scale(-0.025F, -0.025F, 0.025F);
-
-                    Matrix4f matrix4f = poseStack.last().pose();
-
-                    String text = "x" + count;
-
-                    if (ModConfig.get().entityLabelShowName) {
-                        text = clusterEntry.getDisplayName()+" "+text;
+                if (leader instanceof ItemEntity) {
+                    if (!ModConfig.get().itemShowLabel) continue;
+                    if (ModConfig.get().itemLabelShowName) {
+                        text = type.display() + " " + text;
                     }
-
-                    float textOffset = (float)(-font.width(text) / 2);
-
-                    font.drawInBatch(
-                            text, textOffset, -font.lineHeight, ModConfig.get().labelColour, false,
-                            matrix4f, bufferSource, Font.DisplayMode.SEE_THROUGH,
-                            ModConfig.get().labelBgColour,
-                            15728880
-                    );
-
-                    poseStack.popPose();
+                } else if (leader instanceof ExperienceOrb) {
+                    if (!ModConfig.get().xpShowLabel) continue;
+                } else if (leader instanceof Mob) {
+                    if (!ModConfig.get().entityShowLabel) continue;
+                    if (ModConfig.get().entityLabelShowName) {
+                        text = type.display() + " " + text;
+                    }
                 }
 
+                final Vec3 leaderPos = leader.position();
+
+                poseStack.pushPose();
+
+                poseStack.translate(leaderPos.add(Vec3.Y_AXIS.scale(type.entity().getBbHeight())).subtract(cameraPos));
+
+                poseStack.mulPose(camera.rotation());
+                poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
+
+                poseStack.scale(-0.025F, -0.025F, 0.025F);
+
+                Matrix4f matrix4f = poseStack.last().pose();
+
+                float textOffset = (float) (-font.width(text) / 2);
+
+                font.drawInBatch(
+                        text, textOffset, -font.lineHeight - ModConfig.get().labelOffset, ModConfig.get().labelColour, false,
+                        matrix4f, bufferSource, ModConfig.get().renderThroughBlocks ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.POLYGON_OFFSET,
+                        ModConfig.get().labelBgColour,
+                        15728880
+                );
+
+                poseStack.popPose();
             }
         });
-
-
     }
 }
+

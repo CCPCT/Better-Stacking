@@ -10,14 +10,14 @@ import net.minecraft.network.chat.Component;
 public class ConfigScreen extends Screen {
 
     protected ConfigScreen() {
-        super(Component.translatable("easiercrafting.config.title"));
+        super(text("Better Stacking Config"));
     }
 
     public static Screen getConfigScreen(Screen parent) {
         ModConfig.load();
         ConfigBuilder builder = ConfigBuilder.create()
                 .setParentScreen(parent)
-                .setTitle(Component.translatable("easiercrafting.config.title"))
+                .setTitle(text("Better Stacking Config"))
                 .setSavingRunnable(ModConfig::save);
 
         ConfigEntryBuilder entryBuilder = builder.entryBuilder();
@@ -41,6 +41,11 @@ public class ConfigScreen extends Screen {
                 .setSaveConsumer(newValue -> ModConfig.get().entityUpdateTimeInterval = newValue)
                 .build());
 
+        generalTab.addEntry(entryBuilder.startBooleanToggle(text("Label render through blocks"), ModConfig.get().renderThroughBlocks)
+                .setDefaultValue(false)
+                .setSaveConsumer(newValue -> ModConfig.get().renderThroughBlocks = newValue)
+                .build());
+
         generalTab.addEntry(entryBuilder.startAlphaColorField(text("Label Color"), ModConfig.get().labelColour)
                 .setDefaultValue(0xA0FFFF00)
                 .setAlphaMode(true)
@@ -59,6 +64,7 @@ public class ConfigScreen extends Screen {
                 .build());
 
         generalTab.addEntry(entryBuilder.startFloatField(text("Label Offset"), ModConfig.get().labelOffset)
+                .setTooltip(text("y in pixel how high should label offset\n0=right on head"))
                 .setDefaultValue(10.0f)
                 .setSaveConsumer(newValue -> ModConfig.get().labelOffset = newValue)
                 .build());

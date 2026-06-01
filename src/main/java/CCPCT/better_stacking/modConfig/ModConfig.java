@@ -12,6 +12,7 @@ public class ModConfig {
 
     public boolean modEnabled = true;
     public int entityUpdateTimeInterval = 20;
+    public boolean renderThroughBlocks = false;
     public int labelColour = 0xA0FFFF00;
     public int labelBgColour = 0x67676767;
     public float labelSize = 1f;
