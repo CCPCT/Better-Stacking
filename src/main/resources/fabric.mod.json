@@ -3,7 +3,7 @@
   "id": "better_stacking",
   "version": "${version}",
   "name": "Better Stacking",
-  "description": "configure item, entity, xp stacking",
+  "description": "client configure item, entity, xp stacking",
   "authors": ["CCPCT"],
   "contact": {},
   "license": "GPL-3.0",
