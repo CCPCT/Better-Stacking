@@ -1,4 +1,4 @@
-package CCPCT.better_stacking;
+package CCPCT.better_stacking.util;
 
 import net.minecraft.world.entity.AgeableMob;
 import net.minecraft.world.entity.Entity;

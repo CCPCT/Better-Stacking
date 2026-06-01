@@ -21,14 +21,17 @@ public class ModConfig {
     public boolean itemGeneral = false;
     public boolean itemShowLabel = true;
     public boolean itemLabelShowName = true;
+    public int itemSuffixMode = 0;
 
     public boolean entityGeneral = false;
     public int entityCount = 5;
     public boolean entityShowLabel = true;
     public boolean entityLabelShowName = true;
+    public int entitySuffixMode = 0;
 
     public boolean xpGeneral = false;
     public boolean xpShowLabel = true;
+    public int xpSuffixMode = 0;
 
 
     public static ModConfig get() {

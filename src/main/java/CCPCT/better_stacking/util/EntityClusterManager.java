@@ -1,4 +1,4 @@
-package CCPCT.better_stacking;
+package CCPCT.better_stacking.util;
 
 import CCPCT.better_stacking.modConfig.ModConfig;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;

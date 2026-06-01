@@ -86,6 +86,13 @@ public class ConfigScreen extends Screen {
                 .setSaveConsumer(newValue -> ModConfig.get().itemLabelShowName = newValue)
                 .build());
 
+        itemTab.addEntry(entryBuilder.startIntField(text("Show Suffix for large amount of item"), ModConfig.get().itemSuffixMode)
+                .setDefaultValue(0)
+                .setTooltip(text("0: no suffix\n1: engineer suffix, k M G T...\n2: mc suffix: s/stack, sb/shulker box, sbc/shulkerbox double chest"))
+                .setMin(0).setMax(2)
+                .setSaveConsumer(newValue -> ModConfig.get().itemSuffixMode = newValue)
+                .build());
+
 
         // === ENTITY TAB ===
         entityTab.addEntry(entryBuilder.startBooleanToggle(text("Entity General"), ModConfig.get().entityGeneral)
@@ -110,6 +117,13 @@ public class ConfigScreen extends Screen {
                 .setSaveConsumer(newValue -> ModConfig.get().entityLabelShowName = newValue)
                 .build());
 
+        entityTab.addEntry(entryBuilder.startIntField(text("Show Suffix for large amount of entity"), ModConfig.get().entitySuffixMode)
+                .setDefaultValue(0)
+                .setTooltip(text("0: no suffix\n1: engineer suffix, k M G T...\n2: mc suffix: s/stack, sb/shulker box, sbc/shulkerbox double chest"))
+                .setMin(0).setMax(2)
+                .setSaveConsumer(newValue -> ModConfig.get().entitySuffixMode = newValue)
+                .build());
+
 
         // === XP TAB ===
         xpTab.addEntry(entryBuilder.startBooleanToggle(text("XP General"), ModConfig.get().xpGeneral)
@@ -120,6 +134,13 @@ public class ConfigScreen extends Screen {
         xpTab.addEntry(entryBuilder.startBooleanToggle(text("Show XP Label"), ModConfig.get().xpShowLabel)
                 .setDefaultValue(true)
                 .setSaveConsumer(newValue -> ModConfig.get().xpShowLabel = newValue)
+                .build());
+
+        xpTab.addEntry(entryBuilder.startIntField(text("Show Suffix for large amount of xp"), ModConfig.get().xpSuffixMode)
+                .setDefaultValue(0)
+                .setTooltip(text("0: no suffix\n1: engineer suffix, k M G T...\n2: mc suffix: s/stack, sb/shulker box, sbc/shulkerbox double chest"))
+                .setMin(0).setMax(2)
+                .setSaveConsumer(newValue -> ModConfig.get().xpSuffixMode = newValue)
                 .build());
 
         return builder.build();
