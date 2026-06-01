@@ -5,7 +5,10 @@
   "name": "Better Stacking",
   "description": "client configure item, entity, xp stacking",
   "authors": ["CCPCT"],
-  "contact": {},
+  "contact": {
+    "sources": "https://github.com/CCPCT/Better-Stacking",
+    "issues": "https://github.com/CCPCT/Better-Stacking/issues"
+  },
   "license": "GPL-3.0",
   "icon": "assets/better_stacking/icon.png",
   "environment": "*",
