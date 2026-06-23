@@ -8,6 +8,16 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.font.TextRenderable;
+import net.minecraft.client.renderer.StagedVertexBuffer;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
+import net.minecraft.client.renderer.entity.EntityRenderer;
+import net.minecraft.client.renderer.entity.state.TextDisplayEntityRenderState;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.Mob;
@@ -19,10 +29,9 @@ import org.jspecify.annotations.NonNull;
 import java.util.List;
 
 public class RenderUtil {
-    public static void renderLabel(LevelRenderContext context){
+    public static void renderLabel(LevelRenderContext context) {
         Minecraft client = Minecraft.getInstance();
 
-        // Safety and config validation checks
         if (!ModConfig.get().modEnabled || client.level == null) {
             return;
         }
@@ -30,16 +39,19 @@ public class RenderUtil {
         List<EntityClusterManager.ClusterEntry> clusters = EntityClusterManager.getActiveClusters();
         if (clusters.isEmpty()) return;
 
-        Font font = client.font;
         PoseStack poseStack = context.poseStack();
-
-        // FIX: Grab the current frame's interpolated active rendering lens directly from the engine
         Camera camera = client.gameRenderer.mainCamera();
         Vec3 cameraPos = camera.position();
+
+        SubmitNodeCollector nodeCollector = context.submitNodeCollector();
+        CameraRenderState cameraRenderState = context.levelState().cameraRenderState;
+
+        Font font = client.font;
 
         for (EntityClusterManager.ClusterEntry entry : clusters) {
             final int count = entry.count();
             final Entity leader = entry.leader();
+            if (leader == null || !leader.isAlive()) continue;
 
             int suffixMode = switch (leader) {
                 case ItemEntity _ -> ModConfig.get().itemSuffixMode;
@@ -57,87 +69,48 @@ public class RenderUtil {
             String text = "x" + countText;
             final EntityTypeKey type = entry.type();
 
-
             switch (leader) {
                 case ItemEntity _ -> {
                     if (!ModConfig.get().itemShowLabel) continue;
-                    if (ModConfig.get().itemLabelShowName) {
-                        text = type.display() + " " + text;
-                    }
+                    if (ModConfig.get().itemLabelShowName) text = type.display() + " " + text;
                 }
-                case ExperienceOrb _ -> {
-                    if (!ModConfig.get().xpShowLabel) continue;
-                }
+                case ExperienceOrb _ -> { if (!ModConfig.get().xpShowLabel) continue; }
                 case Mob _ -> {
                     if (!ModConfig.get().entityShowLabel) continue;
-                    if (ModConfig.get().entityLabelShowName) {
-                        text = type.display() + " " + text;
-                    }
+                    if (ModConfig.get().entityLabelShowName) text = type.display() + " " + text;
                 }
-                default -> {
-                    continue;
-                }
+                default -> { continue; }
             }
 
+            // 2. Wrap your text in a Component, just like vanilla name tags expect
+            Component labelComponent = Component.literal(text).withStyle(style -> style.withColor(ModConfig.get().labelColour));
+
+            // 3. Interpolate the base location relative to the camera
             final Vec3 leaderPos = leader.position();
+            Vec3 attachmentPosition = leaderPos.add(Vec3.Y_AXIS.scale(type.entity().getBbHeight())).subtract(cameraPos);
 
             poseStack.pushPose();
 
-            poseStack.translate(leaderPos.add(Vec3.Y_AXIS.scale(type.entity().getBbHeight())).subtract(cameraPos));
+            // Translate the matrix to the entity's head height
+            poseStack.translate(attachmentPosition.x, attachmentPosition.y, attachmentPosition.z);
 
-            poseStack.mulPose(camera.rotation());
-            poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
-
-            float scale = ModConfig.get().labelSize/40;
-            poseStack.scale(-scale, -scale, scale);
-
-            Matrix4f matrix4f = poseStack.last().pose();
-
-            float textOffset = (float) (-font.width(text) / 2);
-
-            Font.PreparedText prepared = font.prepareText(text, textOffset, -font.lineHeight, ModConfig.get().labelColour, false, ModConfig.get().labelBgColour);
-
-
-//            font.(
-//                    text, textOffset, -font.lineHeight - ModConfig.get().labelOffset, ModConfig.get().labelColour, false,
-//                    matrix4f, bufferSource, ModConfig.get().renderThroughBlocks ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.POLYGON_OFFSET,
-//                    ModConfig.get().labelBgColour,
-//                    15728880
-//            );
-
-            Font.DisplayMode renderType = ModConfig.get().renderThroughBlocks ?
-                    Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.POLYGON_OFFSET;
-
+            // 4. Submit directly to Mojang's native rendering batcher!
+            // This handles billboarding, scaling, background rendering, and occlusion checks automatically.
             final int packedLight = 15728880;
-            var stagedBuffer = client.gameRenderer.renderBuffers().stagedVertexBuffer();
+            final int offset = 0; // Vertical pixel offset tweak if needed
+            boolean isSeeThrough = ModConfig.get().renderThroughBlocks;
 
-            prepared.visit(new Font.GlyphVisitor() {
-                @Override
-                public void acceptGlyph(net.minecraft.client.gui.font.TextRenderable.@NonNull Styled glyph) {
-                    // Letting the immediateSource route the correct format and sorting array states internally
-                    var type = glyph.renderType(renderType);
-
-
-                    VertexSorting sorting =
-                            type.sortOnUpload() ? VertexSorting.byDistance((float) cameraPos.x, (float) cameraPos.y, (float) cameraPos.z) : null;
-
-                    // 3. Register and get the Draw tracking token
-                    net.minecraft.client.renderer.StagedVertexBuffer.Draw draw = stagedBuffer.appendDraw(
-                            type.format(),
-                            type.primitiveTopology(),
-                            sorting
-                    );
-
-                    // 3. Let the bufferSource compile and return the correct VertexConsumer automatically!
-                    var consumer = stagedBuffer.getVertexBuilder(draw);
-                    glyph.render(matrix4f, consumer, packedLight, false);
-                }
-
-            });
+            nodeCollector.submitNameTag(
+                    poseStack,
+                    net.minecraft.world.phys.Vec3.ZERO, // Base offset relative to our translated matrix
+                    offset,
+                    labelComponent,
+                    isSeeThrough,
+                    packedLight,
+                    cameraRenderState
+            );
 
             poseStack.popPose();
-            stagedBuffer.upload();
-            stagedBuffer.endDraw();
         }
     }
 
@@ -184,4 +157,5 @@ public class RenderUtil {
 
         return String.valueOf(value);
     }
+
 }
