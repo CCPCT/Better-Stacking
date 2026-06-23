@@ -2,18 +2,19 @@ package CCPCT.better_stacking.util;
 
 import CCPCT.better_stacking.modConfig.ModConfig;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.math.Axis;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
+import org.jspecify.annotations.NonNull;
 
 import java.util.List;
 
@@ -30,11 +31,10 @@ public class RenderUtil {
         if (clusters.isEmpty()) return;
 
         Font font = client.font;
-        MultiBufferSource.BufferSource bufferSource = context.bufferSource();
         PoseStack poseStack = context.poseStack();
 
         // FIX: Grab the current frame's interpolated active rendering lens directly from the engine
-        Camera camera = client.gameRenderer.getMainCamera();
+        Camera camera = client.gameRenderer.mainCamera();
         Vec3 cameraPos = camera.position();
 
         for (EntityClusterManager.ClusterEntry entry : clusters) {
@@ -59,16 +59,16 @@ public class RenderUtil {
 
 
             switch (leader) {
-                case ItemEntity itemEntity -> {
+                case ItemEntity _ -> {
                     if (!ModConfig.get().itemShowLabel) continue;
                     if (ModConfig.get().itemLabelShowName) {
                         text = type.display() + " " + text;
                     }
                 }
-                case ExperienceOrb experienceOrb -> {
+                case ExperienceOrb _ -> {
                     if (!ModConfig.get().xpShowLabel) continue;
                 }
-                case Mob mob -> {
+                case Mob _ -> {
                     if (!ModConfig.get().entityShowLabel) continue;
                     if (ModConfig.get().entityLabelShowName) {
                         text = type.display() + " " + text;
@@ -95,14 +95,49 @@ public class RenderUtil {
 
             float textOffset = (float) (-font.width(text) / 2);
 
-            font.drawInBatch(
-                    text, textOffset, -font.lineHeight - ModConfig.get().labelOffset, ModConfig.get().labelColour, false,
-                    matrix4f, bufferSource, ModConfig.get().renderThroughBlocks ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.POLYGON_OFFSET,
-                    ModConfig.get().labelBgColour,
-                    15728880
-            );
+            Font.PreparedText prepared = font.prepareText(text, textOffset, -font.lineHeight, ModConfig.get().labelColour, false, ModConfig.get().labelBgColour);
+
+
+//            font.(
+//                    text, textOffset, -font.lineHeight - ModConfig.get().labelOffset, ModConfig.get().labelColour, false,
+//                    matrix4f, bufferSource, ModConfig.get().renderThroughBlocks ? Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.POLYGON_OFFSET,
+//                    ModConfig.get().labelBgColour,
+//                    15728880
+//            );
+
+            Font.DisplayMode renderType = ModConfig.get().renderThroughBlocks ?
+                    Font.DisplayMode.SEE_THROUGH : Font.DisplayMode.POLYGON_OFFSET;
+
+            final int packedLight = 15728880;
+            var stagedBuffer = client.gameRenderer.renderBuffers().stagedVertexBuffer();
+
+            prepared.visit(new Font.GlyphVisitor() {
+                @Override
+                public void acceptGlyph(net.minecraft.client.gui.font.TextRenderable.@NonNull Styled glyph) {
+                    // Letting the immediateSource route the correct format and sorting array states internally
+                    var type = glyph.renderType(renderType);
+
+
+                    VertexSorting sorting =
+                            type.sortOnUpload() ? VertexSorting.byDistance((float) cameraPos.x, (float) cameraPos.y, (float) cameraPos.z) : null;
+
+                    // 3. Register and get the Draw tracking token
+                    net.minecraft.client.renderer.StagedVertexBuffer.Draw draw = stagedBuffer.appendDraw(
+                            type.format(),
+                            type.primitiveTopology(),
+                            sorting
+                    );
+
+                    // 3. Let the bufferSource compile and return the correct VertexConsumer automatically!
+                    var consumer = stagedBuffer.getVertexBuilder(draw);
+                    glyph.render(matrix4f, consumer, packedLight, false);
+                }
+
+            });
 
             poseStack.popPose();
+            stagedBuffer.upload();
+            stagedBuffer.endDraw();
         }
     }
 
