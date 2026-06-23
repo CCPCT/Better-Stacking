@@ -1,6 +1,7 @@
 package CCPCT.better_stacking.mixin;
 
 import CCPCT.better_stacking.ICustomNameTagSubmitter;
+import CCPCT.better_stacking.modConfig.ModConfig;
 import com.mojang.blaze3d.vertex.PoseStack;
 import me.shedaniel.cloth.clothconfig.shadowed.blue.endless.jankson.annotation.Nullable;
 import net.minecraft.client.Minecraft;
@@ -44,9 +45,10 @@ public class SubmitNodeCollectionMixin implements ICustomNameTagSubmitter {
             poseStack.pushPose();
 
             // Replicate vanilla position and billboard transformations
-            poseStack.translate(nameTagAttachment.x, nameTagAttachment.y + (double)0.5F, nameTagAttachment.z);
+            poseStack.translate(nameTagAttachment.x, nameTagAttachment.y, nameTagAttachment.z);
             poseStack.mulPose(camera.orientation);
-            poseStack.scale(0.025F, -0.025F, 0.025F);
+            final float scale = ModConfig.get().labelSize/40;
+            poseStack.scale(scale, -scale, scale);
 
             Matrix4f pose = new Matrix4f(poseStack.last().pose());
             float x = (float)(-minecraft.font.width(name)) / 2.0F;

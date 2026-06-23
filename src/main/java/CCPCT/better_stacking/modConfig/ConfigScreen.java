@@ -64,8 +64,8 @@ public class ConfigScreen extends Screen {
                 .build());
 
         generalTab.addEntry(entryBuilder.startFloatField(text("Label Offset"), ModConfig.get().labelOffset)
-                .setTooltip(text("y in pixel how high should label offset\n0=right on head"))
-                .setDefaultValue(10.0f)
+                .setTooltip(text("y in blocks how high should label offset\n0=head"))
+                .setDefaultValue(0f)
                 .setSaveConsumer(newValue -> ModConfig.get().labelOffset = newValue)
                 .build());
 

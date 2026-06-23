@@ -3,6 +3,7 @@ package CCPCT.better_stacking.util;
 import CCPCT.better_stacking.ICustomNameTagSubmitter;
 import CCPCT.better_stacking.modConfig.ModConfig;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.terraformersmc.modmenu.util.mod.Mod;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -29,13 +30,11 @@ public class RenderUtil {
         List<EntityClusterManager.ClusterEntry> clusters = EntityClusterManager.getActiveClusters();
         if (clusters.isEmpty()) return;
 
-        PoseStack poseStack = context.poseStack();
+        PoseStack stack = context.poseStack();
         Camera camera = client.gameRenderer.mainCamera();
         Vec3 cameraPos = camera.position();
 
         CameraRenderState cameraRenderState = context.levelState().cameraRenderState;
-
-        Font font = client.font;
 
         OrderedSubmitNodeCollector orderedCollector = context.submitNodeCollector().order(0);
 
@@ -86,12 +85,12 @@ public class RenderUtil {
             Component labelComponent = Component.literal(text);
 
             final Vec3 leaderPos = leader.position();
-            final Vec3 relativePos = leaderPos.subtract(cameraPos).add(Vec3.Y_AXIS.scale(type.entity().getBbHeight()));
+            final Vec3 relativePos = leaderPos.subtract(cameraPos).add(Vec3.Y_AXIS.scale(type.entity().getBbHeight()+ModConfig.get().labelOffset));
 
             // 2. We use the custom interface method, passing world-space coordinates (Vec3)
             // because the method handles the translation internally.
             customSubmitter.betterStacking$submitCustomColorNameTag(
-                    poseStack,
+                    stack,
                     relativePos,
                     0,
                     labelComponent,
@@ -102,7 +101,6 @@ public class RenderUtil {
                     ModConfig.get().labelBgColour
             );
         }
-
     }
 
     public static String intToEng(int value) {
