@@ -6,7 +6,8 @@
   "mixins": [
   ],
   "client": [
-    "EntityRenderer"
+    "EntityRenderer",
+    "SubmitNodeCollectionMixin"
   ],
   "injectors": {
     "defaultRequire": 1
